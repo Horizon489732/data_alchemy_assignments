@@ -81,13 +81,37 @@ if app_mode == "Interactive EDA":
     
     st.subheader("Dataset Preview")
     st.write(df.head())
-    
+
     # Show dataset dimensions
     st.write("Dataset Dimensions:", df.shape)
+
+    # Explaining columns
+    column_descriptions = {
+    "Domain": "The domain name of the URL.",
+    "Have_IP": "Checks for the presence of IP address in the URL, containing an IP address (1) or not (0).",
+    "Have_At": "Checks if '@' is present in the URL (phishing indicator).",
+    "URL_Length": "The length of the URL.",
+    "URL_Depth": "The depth of the URL based on '/' count.",
+    "Redirection": "Indicates if redirection '//' occurs (1: yes, 0: no).",
+    "https_Domain": " Checks for the presence of http/https in the domain part of the URL (1: yes, 0: no).",
+    "TinyURL": "Indicates if a URL shortening service was used (1: yes, 0: no).",
+    "Prefix/Suffix": "Checks for prefix or suffix separated by '-' (1: yes, 0: no).",
+    "iFrame": "Checks whether a web page response is suspicious based on the presence of the | character.",
+    "Mouse_Over": "Detects suspicious mouse-over events (1: if the response is empty or the event is found, 0: otherwise).",
+    "Right_Click": "Checks if right-click is disabled (1: if the response is empty or the event is found, 0: otherwise).",
+    "Web_Forwards": "Counts the number of forwards (phishing indicator).",
+    }
+    st.subheader("Column name explain:")
+
+    with st.expander("View Column Descriptions"):
+        for col, desc in column_descriptions.items():
+            st.markdown(f"**{col}**: {desc}")
+    
     
     # Summary statistics
     st.subheader("Summary Statistics")
     st.write(df.describe())
+
     
     #get columns
     numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
