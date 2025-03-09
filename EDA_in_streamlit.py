@@ -123,6 +123,3 @@ if app_mode == "Interactive EDA":
     )
 
     st.plotly_chart(fig, use_container_width=True)
-
-    
-    
