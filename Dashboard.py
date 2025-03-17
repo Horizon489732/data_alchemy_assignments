@@ -1,37 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import seaborn as sns
-import plotly.express as px
-from ucimlrepo import fetch_ucirepo 
-from sklearn import datasets
-
-# Preprocessing
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import RobustScaler, OneHotEncoder, FunctionTransformer
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-
-from sklearn.model_selection import train_test_split,cross_val_score
-
-# Regression Models
-from sklearn.linear_model import LinearRegression, Ridge, Lasso
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor
-
-# Classification Models
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import plot_tree
-
-
-# Evaluation metrics
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error, root_mean_squared_error, accuracy_score, confusion_matrix, precision_score, recall_score, f1_score, roc_auc_score
-
-# For combining pipelines after encoding
-from sklearn.compose import make_column_selector as selector
+import plotly.express as pxr
 
 sns.set(style="whitegrid")
 
