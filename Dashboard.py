@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import plotly.express as px
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
@@ -13,7 +14,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import plot_tree
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
-sns.set(style="whitegrid")
+sns.set_theme(style="whitegrid")
 
 # App Title
 st.title("Phishing url Dashboard")
@@ -21,7 +22,7 @@ st.title("Phishing url Dashboard")
 # Sidebar navigation
 st.sidebar.title("Navigation")
 app_mode = st.sidebar.radio("Choose the App mode",
-                            ["Dataset Overview", "Interactive EDA", "Model Training"])
+                            ["Dataset Overview", "Interactive EDA", "Model Training", "Model Results"])
 
 @st.cache_data
 def get_data():
@@ -55,6 +56,8 @@ def get_box_plot(box_column):
 
 
 df = get_data()
+if "model_results" not in st.session_state:
+    st.session_state.model_results = {}
 
 if app_mode == "Dataset Overview":
     
@@ -137,9 +140,6 @@ elif app_mode == "Interactive EDA":
         st.plotly_chart(fig, use_container_width=True)
 
 elif app_mode == "Model Training":
-            
-    if "show_model_details" not in st.session_state:
-        st.session_state.show_model_details = True
 
     st.header("Model Training")
 
@@ -187,81 +187,118 @@ elif app_mode == "Model Training":
                                     max_features=max_features)
 
     if st.button("Train Model"):
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
+        try:
+            model.fit(X_train, y_train)
+            y_pred = model.predict(X_test)
 
-        # Metrics
-        acc = accuracy_score(y_test, y_pred)
-        st.write(f"Accuracy: {acc:.4f}")
+            acc = accuracy_score(y_test, y_pred)
+            st.write(f"Accuracy: {acc:.4f}")
 
-        cm = confusion_matrix(y_test, y_pred)
-        st.write("Confusion Matrix:")
-        st.write(cm)
+            cm = confusion_matrix(y_test, y_pred)
+            st.write("Confusion Matrix:")
+            st.write(cm)
 
-        precision = precision_score(y_test, y_pred, pos_label="Phishing URL")
-        recall = recall_score(y_test, y_pred, pos_label="Phishing URL")
-        f1 = f1_score(y_test, y_pred, pos_label="Phishing URL")
+            precision = precision_score(y_test, y_pred, pos_label="Phishing URL")
+            recall = recall_score(y_test, y_pred, pos_label="Phishing URL")
+            f1 = f1_score(y_test, y_pred, pos_label="Phishing URL")
 
-        st.write(f"Precision: {precision:.4f}")
-        st.write(f"Recall: {recall:.4f}")
-        st.write(f"F1 Score: {f1:.4f}")
+            st.write(f"Precision: {precision:.4f}")
+            st.write(f"Recall: {recall:.4f}")
+            st.write(f"F1 Score: {f1:.4f}")
 
-        st.subheader("Classification Report")
+            st.subheader("Classification Report")
 
-        # Plot Confusion Matrix
-        plt.figure(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='magma', cbar=False)
-        plt.xlabel("Predicted Labels")
-        plt.ylabel("True Labels")
-        plt.title("Confusion Matrix")
-        st.pyplot(plt)
+            cm_fig = go.Figure(data=go.Heatmap(
+                    z=cm,
+                    x=["Predicted: No Phishing", "Predicted: Phishing"],
+                    y=["True: No Phishing", "True: Phishing"],
+                    colorscale='Magma',
+                    colorbar=dict(title='Count')
+            ))
+            cm_fig.update_layout(title="Confusion Matrix", xaxis_title="Predicted Labels", yaxis_title="True Labels")
+            st.plotly_chart(cm_fig)
 
-        st.subheader("Model Details")
-            
-        if model_type == "Logistic Regression":
-            # Logistic Regression log odds
-            log_odds = model.coef_  # This returns a 2D array (for binary classification, shape is (1, n_features))
-            log_odds_series = pd.Series(log_odds[0], index=X_train.columns)
-            st.write("Logistic Regression Log Odds:")
-            st.write(log_odds_series.sort_values(ascending=False))
+            st.session_state.model_results[model_type] = {
+                "Parameters": {
+                    "Penalty": penalty,
+                    "C": C,
+                    "Solver": solver,
+                    "Max Iterations": max_iter,
+                    "Gamma": gamma if model_type == "SVM" else None,
+                    "Kernel": kernel if model_type == "SVM" else None,
+                    "Degree": degree if model_type == "SVM" else None,
+                    "Criterion": criterion if model_type == "Decision Tree" else None,
+                    "Max Depth": max_depth if model_type == "Decision Tree" else None,
+                    "Min Samples Split": min_samples_split if model_type == "Decision Tree" else None,
+                    "Min Samples Leaf": min_samples_leaf if model_type == "Decision Tree" else None,
+                    "Max Features": max_features if model_type == "Decision Tree" else None,
+                    "Number of Estimators": n_estimators if model_type == "Random Forest" else None
+                },
+                "Metrics": {
+                    "Accuracy": acc,
+                    "Precision": precision,
+                    "Recall": recall,
+                    "F1 Score": f1,
+                    "Confusion Matrix": cm
+                }
+            }
 
-            # Plot Logistic Regression log odds
-            plt.figure(figsize=(10, 5))
-            sns.barplot(x=log_odds_series.index, y=log_odds_series.values, palette="coolwarm")
-            plt.xticks(rotation=45)
-            plt.axhline(0, color="black", linestyle="--")
-            plt.title("Logistic Regression Log Odds")
-            st.pyplot(plt)
+            print(st.session_state.model_results[model_type])
 
-        elif model_type == "Decision Tree":
-            # Decision Tree visualization
-            plt.figure(figsize=(20, 16))
-            plot_tree(model, feature_names=X_train.columns.tolist(), filled=True, rounded=True, fontsize=10, max_depth=3)
-            plt.title("Decision Tree Structure")
-            st.pyplot(plt)
+            st.subheader("Model Details")
+                
+            if model_type == "Logistic Regression":
+                
+                log_odds = model.coef_  
+                log_odds_series = pd.Series(log_odds[0], index=X_train.columns)
+                st.write("Logistic Regression Log Odds:")
+                st.write(log_odds_series.sort_values(ascending=False))
 
-        elif model_type == "Random Forest":
-            # Random Forest feature importance
-            importance = model.feature_importances_
-            plt.figure(figsize=(10, 5))
-            sns.barplot(x=X_train.columns, y=importance)
-            plt.xticks(rotation=45)
-            plt.title("Feature Importance")
-            st.pyplot(plt)
+                log_odds_fig = px.bar(log_odds_series.sort_values(ascending=False), title="Logistic Regression Log Odds",
+                                labels={'index': 'Features', 'value': 'Log Odds'})
+                st.plotly_chart(log_odds_fig)
 
-        elif model_type == "SVM":
-            if model.kernel == "linear":
-                # SVM Linear model coefficient (Feature importance)
-                coefficients = model.coef_
-                coef_series = pd.Series(coefficients[0], index=X_train.columns)
-                st.write("SVM Linear Model Feature Coefficients:")
-                st.write(coef_series.sort_values(ascending=False))
-
-                # Plot SVM coefficients
-                plt.figure(figsize=(10, 5))
-                sns.barplot(x=coef_series.index, y=coef_series.values, palette="coolwarm")
-                plt.xticks(rotation=45)
-                plt.title("SVM Linear Model Feature Coefficients")
+            elif model_type == "Decision Tree":
+                
+                plt.figure(figsize=(20, 16))
+                plot_tree(model, feature_names=X_train.columns.tolist(), filled=True, rounded=True, fontsize=10, max_depth=3)
+                plt.title("Decision Tree Structure")
                 st.pyplot(plt)
-            else:
-                st.write("For non-linear kernels (e.g., RBF, polynomial), detailed interpretation is not straightforward.")
+
+            elif model_type == "Random Forest":
+                
+                importance = model.feature_importances_
+
+                importance_fig = px.bar(x=X_train.columns, y=importance, title="Feature Importance",
+                                    labels={'x': 'Features', 'y': 'Importance'})
+                st.plotly_chart(importance_fig)
+
+            elif model_type == "SVM":
+                if model.kernel == "linear":
+                    
+                    coefficients = model.coef_
+                    coef_series = pd.Series(coefficients[0], index=X_train.columns)
+                    st.write("SVM Linear Model Feature Coefficients:")
+                    st.write(coef_series.sort_values(ascending=False))
+        
+                    svm_coef_fig = px.bar(coef_series.sort_values(ascending=False), title="SVM Linear Model Feature Coefficients",
+                                    labels={'index': 'Features', 'value': 'Coefficient'})
+                    st.plotly_chart(svm_coef_fig)
+                else:
+                    st.write("For non-linear kernels (e.g., RBF, polynomial), detailed interpretation is not straightforward.")
+        except Exception as e:  # Catch any exception and display it
+            st.write(f"Error occurred: {e}")
+            st.write("Please check the selected penalty and solver combination for compatibility.")
+
+elif app_mode == "Model Results":
+    st.title("Model Results")
+    st.write("Here are the results of your trained models:")
+
+    # Check if model results are available
+    if st.session_state.model_results:
+        for model_name, result in st.session_state.model_results.items():
+            st.subheader(f"{model_name} Results")
+            st.write("Parameters:", result["Parameters"])
+            st.write("Metrics:", result["Metrics"])
+    else:
+        st.write("No models have been trained yet.")   
