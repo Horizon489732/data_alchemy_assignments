@@ -5,6 +5,7 @@ import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
@@ -57,6 +58,7 @@ def get_box_plot(box_column):
 
 df = get_data()
 if "model_results" not in st.session_state:
+    print("Create a result")
     st.session_state.model_results = {}
 
 if app_mode == "Dataset Overview":
@@ -154,7 +156,7 @@ elif app_mode == "Model Training":
         C = st.sidebar.slider("C (Regularization)", min_value=0.0001, max_value=10000.0, value=1.0, step=0.1)
         solver = st.sidebar.selectbox("Solver", ["lbfgs", "newton-cg", "liblinear", "sag", "saga"])
         max_iter = st.sidebar.selectbox("Max Iterations", [100, 1000, 2500, 5000])
-        model = LogisticRegression(penalty=penalty, C=C, solver=solver, max_iter=max_iter)
+        model = LogisticRegression(penalty=penalty, C=C, max_iter=max_iter)
     
     elif model_type == "SVM":
         C = st.sidebar.selectbox("C", [0.1, 1, 10, 100, 1000])
@@ -187,7 +189,6 @@ elif app_mode == "Model Training":
                                     max_features=max_features)
 
     if st.button("Train Model"):
-        try:
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
 
@@ -217,13 +218,17 @@ elif app_mode == "Model Training":
             ))
             cm_fig.update_layout(title="Confusion Matrix", xaxis_title="Predicted Labels", yaxis_title="True Labels")
             st.plotly_chart(cm_fig)
+            
+            model_key = f"{model_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-            st.session_state.model_results[model_type] = {
+            print(model_key)
+
+            st.session_state.model_results[model_key] = {
                 "Parameters": {
-                    "Penalty": penalty,
-                    "C": C,
-                    "Solver": solver,
-                    "Max Iterations": max_iter,
+                    "Penalty": penalty if model_type == "Logistic Regression" else None,
+                    "C": C if model_type == "Logistic Regression" else None,
+                    "Solver": solver if model_type == "Logistic Regression" else None,
+                    "Max Iterations": max_iter if model_type == "Logistic Regression" else None,
                     "Gamma": gamma if model_type == "SVM" else None,
                     "Kernel": kernel if model_type == "SVM" else None,
                     "Degree": degree if model_type == "SVM" else None,
@@ -243,12 +248,9 @@ elif app_mode == "Model Training":
                 }
             }
 
-            print(st.session_state.model_results[model_type])
-
             st.subheader("Model Details")
-                
+          
             if model_type == "Logistic Regression":
-                
                 log_odds = model.coef_  
                 log_odds_series = pd.Series(log_odds[0], index=X_train.columns)
                 st.write("Logistic Regression Log Odds:")
@@ -266,7 +268,7 @@ elif app_mode == "Model Training":
                 st.pyplot(plt)
 
             elif model_type == "Random Forest":
-                
+                print("hihihhihih")
                 importance = model.feature_importances_
 
                 importance_fig = px.bar(x=X_train.columns, y=importance, title="Feature Importance",
@@ -286,9 +288,9 @@ elif app_mode == "Model Training":
                     st.plotly_chart(svm_coef_fig)
                 else:
                     st.write("For non-linear kernels (e.g., RBF, polynomial), detailed interpretation is not straightforward.")
-        except Exception as e:  # Catch any exception and display it
-            st.write(f"Error occurred: {e}")
-            st.write("Please check the selected penalty and solver combination for compatibility.")
+        # except Exception as e:  # Catch any exception and display it
+        #     st.write(f"Error occurred: {e}")
+        #     st.write("Please check the selected penalty and solver combination for compatibility.")
 
 elif app_mode == "Model Results":
     st.title("Model Results")
@@ -296,9 +298,48 @@ elif app_mode == "Model Results":
 
     # Check if model results are available
     if st.session_state.model_results:
+        # Iterate over the model results
         for model_name, result in st.session_state.model_results.items():
-            st.subheader(f"{model_name} Results")
-            st.write("Parameters:", result["Parameters"])
-            st.write("Metrics:", result["Metrics"])
+            st.markdown(f"<h2 style='color: #FF0000; font-weight: bold; text-shadow: 2px 2px 10px #FF0000;'>{model_name} Results</h2>", unsafe_allow_html=True)
+
+            # Display parameters in a table format, excluding None values
+            st.write("### Model Parameters:")
+            params = result["Parameters"]
+            params = {k: v for k, v in params.items() if v is not None}  # Remove None values
+            
+            # Display the parameters in a table format
+            if params:
+                st.table(params)
+            else:
+                st.write("No parameters to display.")
+
+            # Display metrics
+            st.write("### Model Metrics:")
+            metrics = result["Metrics"]
+            
+            # Remove None values from metrics
+            metrics = {k: v for k, v in metrics.items() if v is not None}
+
+            # Display metrics in a table format
+            if metrics:
+                st.table(metrics)
+            else:
+                st.write("No metrics to display.")
+
+            # Display confusion matrix as a heatmap for better visualization
+            cm = result["Metrics"].get("Confusion Matrix")
+            if cm is not None:
+                cm_fig = go.Figure(data=go.Heatmap(
+                        z=cm,
+                        x=["Predicted: No Phishing", "Predicted: Phishing"],
+                        y=["True: No Phishing", "True: Phishing"],
+                        colorscale='Magma',
+                        colorbar=dict(title='Count')
+                ))
+                cm_fig.update_layout(title=f"{model_name} - Confusion Matrix", xaxis_title="Predicted Labels", yaxis_title="True Labels")
+                st.plotly_chart(cm_fig)
+                
+            # Provide a break between model results
+            st.write("---")
     else:
-        st.write("No models have been trained yet.")   
+        st.write("No models have been trained yet.")
