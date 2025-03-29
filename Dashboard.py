@@ -268,7 +268,6 @@ elif app_mode == "Model Training":
                 st.pyplot(plt)
 
             elif model_type == "Random Forest":
-                print("hihihhihih")
                 importance = model.feature_importances_
 
                 importance_fig = px.bar(x=X_train.columns, y=importance, title="Feature Importance",
@@ -302,31 +301,25 @@ elif app_mode == "Model Results":
         for model_name, result in st.session_state.model_results.items():
             st.markdown(f"<h2 style='color: #FF0000; font-weight: bold; text-shadow: 2px 2px 10px #FF0000;'>{model_name} Results</h2>", unsafe_allow_html=True)
 
-            # Display parameters in a table format, excluding None values
             st.write("### Model Parameters:")
             params = result["Parameters"]
-            params = {k: v for k, v in params.items() if v is not None}  # Remove None values
+            params = {k: v for k, v in params.items() if v is not None} 
             
-            # Display the parameters in a table format
             if params:
                 st.table(params)
             else:
                 st.write("No parameters to display.")
 
-            # Display metrics
             st.write("### Model Metrics:")
             metrics = result["Metrics"]
             
-            # Remove None values from metrics
-            metrics = {k: v for k, v in metrics.items() if v is not None}
+            metrics = {k: v for k, v in metrics.items() if v is not None and k != "Confusion Matrix"}
 
-            # Display metrics in a table format
             if metrics:
                 st.table(metrics)
             else:
                 st.write("No metrics to display.")
 
-            # Display confusion matrix as a heatmap for better visualization
             cm = result["Metrics"].get("Confusion Matrix")
             if cm is not None:
                 cm_fig = go.Figure(data=go.Heatmap(
@@ -339,7 +332,6 @@ elif app_mode == "Model Results":
                 cm_fig.update_layout(title=f"{model_name} - Confusion Matrix", xaxis_title="Predicted Labels", yaxis_title="True Labels")
                 st.plotly_chart(cm_fig)
                 
-            # Provide a break between model results
             st.write("---")
     else:
         st.write("No models have been trained yet.")
