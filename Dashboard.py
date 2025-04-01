@@ -7,13 +7,18 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 from datetime import datetime
 
+from urllib.parse import urlparse
+import requests
+import ipaddress
+import re
+
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import plot_tree
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
 
 sns.set_theme(style="whitegrid")
 
@@ -23,12 +28,12 @@ st.title("Phishing url Dashboard")
 # Sidebar navigation
 st.sidebar.title("Navigation")
 app_mode = st.sidebar.radio("Choose the App mode",
-                            ["Dataset Overview", "Interactive EDA", "Model Training", "Model Results"])
+                            ["Dataset Overview", "Interactive EDA", "Model Training", "Model Results", "Predict"])
 
 @st.cache_data
 def get_data():
     df = pd.read_csv("urldata.csv")
-    df['Label'] = df['Label'].map({0: 'Real URL', 1: 'Phishing URL'})
+    # df['Label'] = df['Label'].map({0: 'Real URL', 1: 'Phishing URL'})
     return df
 
 @st.cache_data
@@ -55,10 +60,137 @@ def get_box_plot(box_column):
     fig_box = px.box(df, x=box_column, title="Box Plot by Category")
     st.plotly_chart(fig_box, use_container_width=True)
 
+def extract_feature(url):
+    result = {}
+
+    #Get the Ip
+    try:
+        ipaddress.ip_address(url)
+        result['Have_IP'] = 1
+    except:
+        result['Have_IP'] = 0
+
+    print(result)
+
+    #Get HaveAt
+    result['Have_At'] = 1 if "@" in url else 0
+
+    #Get urlLength
+    result['URL_Length'] = 1 if len(url) >= 54 else 0 
+
+    print(result)
+    
+    #Get URL_Depth
+    s = urlparse(url).path.split('/')
+    depth = 0
+    for j in range(len(s)):
+        if len(s[j]) != 0:
+            depth = depth+1
+    result['URL_Depth'] = depth
+
+    print(result)
+
+    #Get Redirection
+    pos = url.rfind('//')
+    if pos > 6:
+        if pos > 7:
+            result['Redirection'] = 1
+        else:
+            result['Redirection'] = 0
+    else:
+        result['Redirection'] = 0
+
+    print(result)
+
+    #HTTPSDomain
+    domain = urlparse(url).netloc
+    if 'https' in domain:
+        result['https_Domain'] = 1
+    else:
+        result['https_Domain'] = 0
+
+    print(result)
+
+    #tinyURL
+    shortening_services = r"bit\.ly|goo\.gl|shorte\.st|go2l\.ink|x\.co|ow\.ly|t\.co|tinyurl|tr\.im|is\.gd|cli\.gs|" \
+                      r"yfrog\.com|migre\.me|ff\.im|tiny\.cc|url4\.eu|twit\.ac|su\.pr|twurl\.nl|snipurl\.com|" \
+                      r"short\.to|BudURL\.com|ping\.fm|post\.ly|Just\.as|bkite\.com|snipr\.com|fic\.kr|loopt\.us|" \
+                      r"doiop\.com|short\.ie|kl\.am|wp\.me|rubyurl\.com|om\.ly|to\.ly|bit\.do|t\.co|lnkd\.in|db\.tt|" \
+                      r"qr\.ae|adf\.ly|goo\.gl|bitly\.com|cur\.lv|tinyurl\.com|ow\.ly|bit\.ly|ity\.im|q\.gs|is\.gd|" \
+                      r"po\.st|bc\.vc|twitthis\.com|u\.to|j\.mp|buzurl\.com|cutt\.us|u\.bb|yourls\.org|x\.co|" \
+                      r"prettylinkpro\.com|scrnch\.me|filoops\.info|vzturl\.com|qr\.net|1url\.com|tweez\.me|v\.gd|" \
+                      r"tr\.im|link\.zip\.net"
+    match=re.search(shortening_services,url)
+    if match:
+        result['TinyURL'] = 1
+    else:
+        result['TinyURL'] = 0
+
+    print(result)
+
+    #Pre/Suffix
+    if '-' in urlparse(url).netloc:
+        result['Prefix/Suffix'] = 1 
+    else:
+        result['Prefix/Suffix'] = 0
+
+    print(result)
+
+    try:
+        response = requests.get(url)
+    except:
+        response = ""
+
+    #iFrame
+    if response == "":
+      result['iFrame'] = 1
+    else:
+        if re.findall(r"[<iframe>|<frameBorder>]", response.text):
+            result['iFrame'] = 0
+        else:
+            result['iFrame'] = 1
+    
+    print(result)
+    
+    #mouseOver
+    if response == "" :
+        result['Mouse_Over'] = 1
+    else:
+        if re.findall("<script>.+onmouseover.+</script>", response.text):
+            result['Mouse_Over'] = 1
+        else:
+            result['Mouse_Over'] = 0
+
+    print(result)
+
+    #rightClick
+    if response == "":
+        result['Right_Click'] = 1
+    else:
+        if re.findall(r"event.button ?== ?2", response.text):
+            result['Right_Click'] = 0
+        else:
+            result['Right_Click'] = 1
+
+    print(result)
+    
+    #WebForward
+    if response == "":
+        result['Web_Forwards'] = 1
+    else:
+        if len(response.history) <= 2:
+            result['Web_Forwards'] = 0
+        else:
+            result['Web_Forwards'] = 1
+    
+    print(result)
+
+    return pd.DataFrame([result])
+
 
 df = get_data()
+
 if "model_results" not in st.session_state:
-    print("Create a result")
     st.session_state.model_results = {}
 
 if app_mode == "Dataset Overview":
@@ -84,6 +216,7 @@ if app_mode == "Dataset Overview":
     "Mouse_Over": "Detects suspicious mouse-over events (1: if the response is empty or the event is found, 0: otherwise).",
     "Right_Click": "Checks if right-click is disabled (1: if the response is empty or the event is found, 0: otherwise).",
     "Web_Forwards": "Counts the number of forwards (phishing indicator).",
+    "Label": "1 means Phishing URL and vice versa "
     }
     st.subheader("Column name explain:")
 
@@ -98,7 +231,7 @@ if app_mode == "Dataset Overview":
 
     # Plot numeric column distributions
     st.subheader("Feature Distributions")
-    for column in df.drop(columns=['Domain', 'Label']).columns:
+    for column in df.drop(columns=['Domain']).columns:
         count_data = df[column].value_counts().reset_index()
         count_data.columns = [column, 'Count']
         fig = px.bar(count_data, x=column, y='Count', title=f"Distribution of {column}", template="plotly_dark",
@@ -109,10 +242,13 @@ elif app_mode == "Interactive EDA":
     st.header("Exploratory Data Analysis")
     
     # Load dataset (Iris dataset as an example)
+
+    EDA_df = get_data()
+    EDA_df['Label'] = EDA_df['Label'].map({0: 'Real URL', 1: 'Phishing URL'})
     
     #get columns
-    numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
-    categorical_columns = df.select_dtypes(include="object").columns.tolist()
+    numeric_columns = EDA_df.select_dtypes(include=[np.number]).columns.tolist()
+    categorical_columns = EDA_df.select_dtypes(include="object").columns.tolist()
     categorical_columns.reverse()
 
     # Chart selection
@@ -194,21 +330,17 @@ elif app_mode == "Model Training":
 
             acc = accuracy_score(y_test, y_pred)
             st.write(f"Accuracy: {acc:.4f}")
-
-            cm = confusion_matrix(y_test, y_pred)
-            st.write("Confusion Matrix:")
-            st.write(cm)
-
-            precision = precision_score(y_test, y_pred, pos_label="Phishing URL")
-            recall = recall_score(y_test, y_pred, pos_label="Phishing URL")
-            f1 = f1_score(y_test, y_pred, pos_label="Phishing URL")
+            precision = precision_score(y_test, y_pred)
+            recall = recall_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred)
 
             st.write(f"Precision: {precision:.4f}")
             st.write(f"Recall: {recall:.4f}")
             st.write(f"F1 Score: {f1:.4f}")
 
-            st.subheader("Classification Report")
+            st.subheader("Confusion Matrix:")
 
+            cm = confusion_matrix(y_test, y_pred)
             cm_fig = go.Figure(data=go.Heatmap(
                     z=cm,
                     x=["Predicted: No Phishing", "Predicted: Phishing"],
@@ -221,9 +353,9 @@ elif app_mode == "Model Training":
             
             model_key = f"{model_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-            print(model_key)
 
             st.session_state.model_results[model_key] = {
+                "Model": model,
                 "Parameters": {
                     "Penalty": penalty if model_type == "Logistic Regression" else None,
                     "C": C if model_type == "Logistic Regression" else None,
@@ -298,7 +430,9 @@ elif app_mode == "Model Results":
     # Check if model results are available
     if st.session_state.model_results:
         # Iterate over the model results
-        for model_name, result in st.session_state.model_results.items():
+        sorted_models = sorted(st.session_state.model_results.items(), key=lambda x: x[1]['Metrics'].get('Recall', 0), reverse=True)
+
+        for model_name, result in sorted_models:
             st.markdown(f"<h2 style='color: #FF0000; font-weight: bold; text-shadow: 2px 2px 10px #FF0000;'>{model_name} Results</h2>", unsafe_allow_html=True)
 
             st.write("### Model Parameters:")
@@ -335,3 +469,31 @@ elif app_mode == "Model Results":
             st.write("---")
     else:
         st.write("No models have been trained yet.")
+elif app_mode == "Predict":
+    st.title("URL Prediction")
+    st.write("Enter a URL to predict if it's a phishing URL using your trained model.")
+
+    if not st.session_state.model_results:
+        st.write("No models available. Please train a model first.")
+    else:
+
+        model_name = st.selectbox("Select a trained model:", list(st.session_state.model_results.keys()))
+        model_info = st.session_state.model_results[model_name]
+        model = model_info['Model']
+
+        input_url = st.text_input("Enter a URL:")
+        
+        if st.button("Predict"):
+            if not input_url:
+                st.warning("Please enter a URL.")
+            else:
+                feature_df = extract_feature(input_url)
+
+                prediction = model.predict(feature_df)
+
+                print(prediction)
+
+                if prediction == 1:
+                    st.success("The entered URL is: **Phishing**")
+                else:
+                    st.success("The entered URL is: **Not Phishing**")
