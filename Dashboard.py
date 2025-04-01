@@ -306,7 +306,7 @@ elif app_mode == "Model Training":
         kernel = st.sidebar.selectbox("Kernel", ["linear", "poly", "rbf", "sigmoid"])
         degree = st.sidebar.selectbox("Degree (for polynomial kernel)", [2, 3, 4])
 
-        model = SVC(C=C, gamma=gamma, kernel=kernel, degree=degree)
+        model = SVC(C=C, gamma=gamma, kernel=kernel, degree=degree, probability = True)
 
     elif model_type == "Decision Tree":
         criterion = st.sidebar.selectbox("Criterion", ["gini", "entropy"])
