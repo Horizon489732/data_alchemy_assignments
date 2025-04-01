@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import os
+import joblib
 import plotly.express as px
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
@@ -24,6 +26,8 @@ sns.set_theme(style="whitegrid")
 
 # App Title
 st.title("Phishing url Dashboard")
+if not os.path.exists("saved_models"):
+    os.makedirs("saved_models", exist_ok=True)
 
 # Sidebar navigation
 st.sidebar.title("Navigation")
@@ -33,7 +37,9 @@ app_mode = st.sidebar.radio("Choose the App mode",
 @st.cache_data
 def get_data():
     df = pd.read_csv("urldata.csv")
-    # df['Label'] = df['Label'].map({0: 'Real URL', 1: 'Phishing URL'})
+    df['Domain'] = df['Domain'].astype(str).apply(lambda x: x.encode('utf-8').decode('utf-8'))
+    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    print(df.dtypes)
     return df
 
 @st.cache_data
@@ -223,7 +229,9 @@ if app_mode == "Dataset Overview":
     with st.expander("View Column Descriptions"):
         for col, desc in column_descriptions.items():
             st.markdown(f"**{col}**: {desc}")
-    
+
+    st.subheader("Column Data Types")
+    st.write(df.dtypes)
     
     # Summary statistics
     st.subheader("Summary Statistics")
@@ -240,8 +248,6 @@ if app_mode == "Dataset Overview":
 
 elif app_mode == "Interactive EDA":
     st.header("Exploratory Data Analysis")
-    
-    # Load dataset (Iris dataset as an example)
 
     EDA_df = get_data()
     EDA_df['Label'] = EDA_df['Label'].map({0: 'Real URL', 1: 'Phishing URL'})
@@ -278,7 +284,7 @@ elif app_mode == "Interactive EDA":
         st.plotly_chart(fig, use_container_width=True)
 
 elif app_mode == "Model Training":
-
+    
     st.header("Model Training")
 
     model_type = st.sidebar.selectbox("Select Model", ["Logistic Regression", "SVM", "Decision Tree", "Random Forest"])
@@ -325,8 +331,12 @@ elif app_mode == "Model Training":
                                     max_features=max_features)
 
     if st.button("Train Model"):
+
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
+
+            model_key = f"{model_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            st.write(f"Model Key: {model_key}")
 
             acc = accuracy_score(y_test, y_pred)
             st.write(f"Accuracy: {acc:.4f}")
@@ -351,11 +361,12 @@ elif app_mode == "Model Training":
             cm_fig.update_layout(title="Confusion Matrix", xaxis_title="Predicted Labels", yaxis_title="True Labels")
             st.plotly_chart(cm_fig)
             
-            model_key = f"{model_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
+            model_filename = f"saved_models/{model_key}.joblib"
+            joblib.dump(model, model_filename)
 
             st.session_state.model_results[model_key] = {
-                "Model": model,
+                "Model Path": model_filename,
                 "Parameters": {
                     "Penalty": penalty if model_type == "Logistic Regression" else None,
                     "C": C if model_type == "Logistic Regression" else None,
@@ -479,7 +490,13 @@ elif app_mode == "Predict":
 
         model_name = st.selectbox("Select a trained model:", list(st.session_state.model_results.keys()))
         model_info = st.session_state.model_results[model_name]
-        model = model_info['Model']
+
+        model_path = model_info["Model Path"]
+        if os.path.exists(model_path):
+            model = joblib.load(model_path)
+        else:
+            st.error("Model file not found. Please retrain the model.")
+            st.stop()
 
         input_url = st.text_input("Enter a URL:")
         
@@ -489,11 +506,13 @@ elif app_mode == "Predict":
             else:
                 feature_df = extract_feature(input_url)
 
-                prediction = model.predict(feature_df)
+                prob = model.predict_proba(feature_df)[:, 1]  # Get probability of class 1 (Phishing)
 
-                print(prediction)
+                # st.write(f"Prediction Probability: {prob[0]:.2f}")
 
-                if prediction == 1:
-                    st.success("The entered URL is: **Phishing**")
+                if prob[0] > 0.9:
+                    # st.success(f"The entered URL is: **Phishing** (Confidence: {prob[0]:.2f})")
+                    st.success(f"The entered URL is: **Phishing**")
                 else:
-                    st.success("The entered URL is: **Not Phishing**")
+                    # st.success(f"The entered URL is: **Not Phishing** (Confidence: {prob[0]:.2f})")
+                    st.success(f"The entered URL is: **Not Phishing**")
