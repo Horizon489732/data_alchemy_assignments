@@ -20,7 +20,7 @@ from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import plot_tree
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 
 sns.set_theme(style="whitegrid")
 
@@ -32,7 +32,7 @@ if not os.path.exists("saved_models"):
 # Sidebar navigation
 st.sidebar.title("Navigation")
 app_mode = st.sidebar.radio("Choose the App mode",
-                            ["Dataset Overview", "Interactive EDA", "Model Training", "Model Results", "Predict"])
+                            ["Dataset Overview", "Interactive EDA", "Model Training", "Model Results", "Predict", "Insight"])
 
 @st.cache_data
 def get_data():
@@ -332,6 +332,7 @@ elif app_mode == "Model Training":
 
     if st.button("Train Model"):
 
+        try:
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
 
@@ -430,9 +431,9 @@ elif app_mode == "Model Training":
                     st.plotly_chart(svm_coef_fig)
                 else:
                     st.write("For non-linear kernels (e.g., RBF, polynomial), detailed interpretation is not straightforward.")
-        # except Exception as e:  # Catch any exception and display it
-        #     st.write(f"Error occurred: {e}")
-        #     st.write("Please check the selected penalty and solver combination for compatibility.")
+        except Exception as e:  # Catch any exception and display it
+            st.write(f"Error occurred: {e}")
+            st.write("Please check the selected penalty and solver combination for compatibility.")
 
 elif app_mode == "Model Results":
     st.title("Model Results")
@@ -509,10 +510,63 @@ elif app_mode == "Predict":
                 prob = model.predict_proba(feature_df)[:, 1]  # Get probability of class 1 (Phishing)
 
                 # st.write(f"Prediction Probability: {prob[0]:.2f}")
+                threshold = st.session_state.get("custom_threshold", 0.9)
 
-                if prob[0] > 0.9:
+                if prob[0] > threshold:
+                    print(threshold)
                     # st.success(f"The entered URL is: **Phishing** (Confidence: {prob[0]:.2f})")
                     st.success(f"The entered URL is: **Phishing**")
                 else:
                     # st.success(f"The entered URL is: **Not Phishing** (Confidence: {prob[0]:.2f})")
                     st.success(f"The entered URL is: **Not Phishing**")
+
+elif app_mode == "Insight":
+    st.title("Insights from EDA")
+
+    st.markdown("""
+    ### Observation from EDA
+    All features in the dataset are binary, represented as 0s and 1s.
+    
+    From the **correlation matrix** and feature charts, features like **`Prefix.Suffix`** and **`MouseOver`** appear to have strong relationships with the target label. These features could be key indicators in identifying phishing URLs.
+
+    Since both the input features and the target are binary, models such as **Decision Tree** and **Random Forest** naturally come to mind for their performance and interpretability. Additionally, **SVM** is considered due to its effectiveness in binary classification and separating decision boundaries.
+
+    In the **Model Results** section, models are sorted by **recall**. This is intentional — missing a phishing URL (false negative) could be more harmful than a false alarm.
+    """)
+
+    st.markdown("---")
+
+    st.markdown("""
+    ###Dashboard Vision
+
+    This dashboard is designed for **user freedom and flexibility**. Users can:
+    - Customize training options for different models,
+    - Choose which evaluation metrics or visualizations to view,
+    - Predict phishing URLs on-demand.
+
+    The goal is to **empower users** to explore, train, and analyze without unnecessary handholding.
+    """)
+
+    with st.expander("🤫 psst..."):
+        st.markdown("""
+        **The models were REALLY BAD at the 'Predict' step at first...**  
+        They would literally label **everything** as phishing — yes, even **https://www.google.com/** 😅.
+
+        Why? Because models were ranked by **Recall** — which is great for catching all phishing URLs, but it also means they panic and flag almost everything as suspicious.
+
+        **The Fix:**  
+        We changed the strategy! Instead of relying on hard predictions, we now use prediction **probabilities**. The model must be **at least 90% sure** (`threshold = 0.9`) before it screams "Phishing!"
+
+        This little tweak helped calm the paranoia. You're welcome, Google.
+        """)
+
+        if st.checkbox("Want to adjust the phishing detection threshold?"):
+            new_threshold = st.slider(
+                "Choose your threshold (default is 0.9):",
+                min_value=0.0,
+                max_value=1.0,
+                value=st.session_state.get("custom_threshold", 0.9),
+                step=0.01
+            )
+            st.session_state.custom_threshold = new_threshold
+            st.write(f"✅ Current threshold set to: **{new_threshold:.2f}**")
